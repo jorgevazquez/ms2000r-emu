@@ -59,6 +59,38 @@ Windows builds are on the [Releases](../../releases) page: `ms2000_emulator.exe`
 VST3 folder (usually `C:\Program Files\Common Files\VST3`); on its first start open Settings -> "Choose the
 MS2000 folder..." and pick the folder with the ROMs (remembered in `%APPDATA%\MS2000R\home.txt`). The Microsoft Visual C++ 2015-2022 x64 runtime is needed.
 
+macOS (Apple Silicon only, arm64) builds are in this repository, in `dist/macOS`: the standalone `MS2000R.app` and the
+plugins `MS2000R.vst3`, `MS2000R.component` (AU) and `MS2000R.clap`, built from the commit that added them (see
+[Build (macOS)](#build-macos) to build your own). Install the plugins with
+
+```
+cp -R dist/macOS/MS2000R.vst3 ~/Library/Audio/Plug-Ins/VST3/
+cp -R dist/macOS/MS2000R.component ~/Library/Audio/Plug-Ins/Components/
+cp -R dist/macOS/MS2000R.clap ~/Library/Audio/Plug-Ins/CLAP/
+```
+
+and put `MS2000R.app` anywhere; the ROM folder is found or asked for as described under Build (macOS).
+
+They are ad-hoc signed, which is bound to this Mac's copy of the files: a download through a browser (quarantine), a
+Finder/iCloud attribute or any changed file makes macOS refuse them ("damaged", or a plugin the host does not list).
+Sign them again locally - no Apple account needed - in the folder that holds them (`dist/macOS`, or each plugin
+folder after installing):
+
+```
+xattr -cr MS2000R.app MS2000R.vst3 MS2000R.component MS2000R.clap
+codesign --force --sign - MS2000R.app
+for b in MS2000R.vst3 MS2000R.component MS2000R.clap; do
+  codesign --force --sign - $b/Contents/Resources/MS2000R_engine   # the engine first: it is code outside Contents/MacOS
+  codesign --force --sign - $b
+done
+codesign -v --deep --strict MS2000R.app MS2000R.vst3 MS2000R.component MS2000R.clap   # silent = all valid
+```
+
+`xattr -cr` removes the quarantine and the attributes codesign refuses ("resource fork, Finder information, or
+similar detritus not allowed"). For the AU, make macOS rescan and check it: `killall -9 AudioComponentRegistrar`, then
+`auval -v aumu Ms2r Msem` (ends with "AU VALIDATION SUCCEEDED"). An ad-hoc signature is for this Mac only; to pass
+the files on to other Macs they need a Developer ID signature and notarization.
+
 ## What you need - NOT included
 
 This repository contains **no firmware, no ROM and no manual**. You need dumps from your own hardware:
