@@ -59,7 +59,7 @@ Windows builds are on the [Releases](../../releases) page: `ms2000_emulator.exe`
 VST3 folder (usually `C:\Program Files\Common Files\VST3`); on its first start open Settings -> "Choose the
 MS2000 folder..." and pick the folder with the ROMs (remembered in `%APPDATA%\MS2000R\home.txt`). The Microsoft Visual C++ 2015-2022 x64 runtime is needed.
 
-macOS (Apple Silicon only, arm64) builds are in this repository, in `dist/macOS`: the standalone `MS2000R.app` and the
+macOS (Apple Silicon only, arm64; macOS 11 Big Sur or later) builds are in this repository, in `dist/macOS`: the standalone `MS2000R.app` and the
 plugins `MS2000R.vst3`, `MS2000R.component` (AU) and `MS2000R.clap`, built from the commit that added them (see
 [Build (macOS)](#build-macos) to build your own). Install the plugins with
 
@@ -140,7 +140,7 @@ as a 32-bit WAV. `ctest` in the build folder runs the test suite.
 
 Apple Silicon builds natively (the DSP runs on the dsp56300 library's ARM64 JIT; its output is bit-identical to the
 x64 build). Xcode Command Line Tools, CMake 3.16+ and Ninja (`brew install cmake ninja`); ImGui and GLFW are fetched
-at configure time. If the repository is in a folder iCloud syncs (Desktop, Documents), give the build folder a name
+at configure time. The build targets macOS 11 (`CMAKE_OSX_DEPLOYMENT_TARGET`), whatever the SDK. If the repository is in a folder iCloud syncs (Desktop, Documents), give the build folder a name
 ending in `.nosync`: iCloud makes "name 2" copies of files a build rewrites, and the build then fails on them.
 
 ```

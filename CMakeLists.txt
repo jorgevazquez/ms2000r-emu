@@ -9,6 +9,12 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     endif()
 endif()
 
+# MAC-7: without a deployment target clang stamps the SDK version (27.0) as the minimum - the binaries then
+# refused to load before macOS 27. 11.0 = the first arm64 macOS, as Info.plist says.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+endif()
+
 project(KorgMS2000 VERSION 0.9.7 LANGUAGES CXX)
 
 # MAC-4: a plugin lives in a host that has its own JUCE (or its own anything), and macOS coalesces every exported
