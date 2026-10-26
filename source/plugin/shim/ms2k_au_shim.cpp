@@ -23,6 +23,17 @@
 #include <mutex>
 #include <string>
 
+// FX-1: the effect version (MS2000R FX.component) - JUCE's factory there is MS2000RFXAUFactory, and its engine copies
+// go to a folder of their own (both loaders can be in one process; each removes its own process's leftovers)
+#ifndef MS2K_AU_FACTORY
+#define MS2K_AU_FACTORY MS2000RAUFactory
+#endif
+#ifndef MS2K_ENGINE_DIR
+#define MS2K_ENGINE_DIR "MS2000R_au_engines"
+#endif
+#define MS2K_STR2(x) #x
+#define MS2K_STR(x) MS2K_STR2(x)
+
 namespace {
 
 typedef AudioComponentPlugInInterface* (*FactoryProc)(const AudioComponentDescription*);
@@ -60,7 +71,7 @@ std::string tempDir()
     const char* t = std::getenv("TMPDIR");
     std::string d = t && *t ? t : "/tmp/";
     if (d.back() != '/') d += '/';
-    d += "MS2000R_au_engines";
+    d += MS2K_ENGINE_DIR;
     std::error_code ec; std::filesystem::create_directories(d, ec);
     return d;
 }
@@ -82,7 +93,7 @@ bool loadCopy(EngineCopy& c)
 {
     c.module = dlopen(c.path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!c.module) return false;
-    c.factory = reinterpret_cast<FactoryProc>(dlsym(c.module, "MS2000RAUFactory"));
+    c.factory = reinterpret_cast<FactoryProc>(dlsym(c.module, MS2K_STR(MS2K_AU_FACTORY)));
     c.live = reinterpret_cast<CountProc>(dlsym(c.module, "ms2k_liveProcessors"));
     c.created = reinterpret_cast<CountProc>(dlsym(c.module, "ms2k_createdProcessors"));
     if (!c.factory) { dlclose(c.module); c.module = nullptr; return false; }
@@ -123,7 +134,7 @@ bool isFree(const EngineCopy& c)
 
 } // namespace
 
-extern "C" __attribute__((visibility("default"))) AudioComponentPlugInInterface* MS2000RAUFactory(const AudioComponentDescription* desc)
+extern "C" __attribute__((visibility("default"))) AudioComponentPlugInInterface* MS2K_AU_FACTORY(const AudioComponentDescription* desc)
 {
     std::lock_guard<std::mutex> l(g_lock);
     if (!first()) return nullptr;

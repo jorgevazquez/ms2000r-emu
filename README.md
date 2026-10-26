@@ -60,11 +60,17 @@ VST3 folder (usually `C:\Program Files\Common Files\VST3`); on its first start o
 MS2000 folder..." and pick the folder with the ROMs (remembered in `%APPDATA%\MS2000R\home.txt`). The Microsoft Visual C++ 2015-2022 x64 runtime is needed.
 
 macOS (Apple Silicon only, arm64; macOS 11 Big Sur or later) builds are in this repository, in `dist/macOS`: the standalone `MS2000R.app` and the
-plugins `MS2000R.vst3`, `MS2000R.component` (AU) and `MS2000R.clap`, built from the commit that added them (see
-[Build (macOS)](#build-macos) to build your own). Install the plugins with
+plugins `MS2000R.vst3`, `MS2000R.component` (AU) and `MS2000R.clap`, and the same three as `MS2000R FX`, built from the
+commit that added them (see [Build (macOS)](#build-macos) to build your own). `MS2000R FX` is the same machine as an
+effect (VST3, AU music effect, CLAP): insert it on an
+audio track and that track is its AUDIO IN (vocoder, OSC1 AUDIO IN) - hosts do not route audio to an instrument. It
+takes MIDI like the instrument (route a MIDI track to it). Install the plugins with
 
 ```
 cp -R dist/macOS/MS2000R.vst3 ~/Library/Audio/Plug-Ins/VST3/
+cp -R "dist/macOS/MS2000R FX.vst3" ~/Library/Audio/Plug-Ins/VST3/
+cp -R "dist/macOS/MS2000R FX.component" ~/Library/Audio/Plug-Ins/Components/
+cp -R "dist/macOS/MS2000R FX.clap" ~/Library/Audio/Plug-Ins/CLAP/
 cp -R dist/macOS/MS2000R.component ~/Library/Audio/Plug-Ins/Components/
 cp -R dist/macOS/MS2000R.clap ~/Library/Audio/Plug-Ins/CLAP/
 ```
@@ -77,18 +83,18 @@ Sign them again locally - no Apple account needed - in the folder that holds the
 folder after installing):
 
 ```
-xattr -cr MS2000R.app MS2000R.vst3 MS2000R.component MS2000R.clap
+xattr -cr MS2000R.app MS2000R*.vst3 MS2000R*.component MS2000R*.clap
 codesign --force --sign - MS2000R.app
-for b in MS2000R.vst3 MS2000R.component MS2000R.clap; do
-  codesign --force --sign - $b/Contents/Resources/MS2000R_engine   # the engine first: it is code outside Contents/MacOS
-  codesign --force --sign - $b
+for b in MS2000R*.vst3 MS2000R*.component MS2000R*.clap; do
+  codesign --force --sign - "$b/Contents/Resources/MS2000R_engine"   # the engine first: it is code outside Contents/MacOS
+  codesign --force --sign - "$b"
 done
-codesign -v --deep --strict MS2000R.app MS2000R.vst3 MS2000R.component MS2000R.clap   # silent = all valid
+codesign -v --deep --strict MS2000R.app MS2000R*.vst3 MS2000R*.component MS2000R*.clap   # silent = all valid
 ```
 
 `xattr -cr` removes the quarantine and the attributes codesign refuses ("resource fork, Finder information, or
 similar detritus not allowed"). For the AU, make macOS rescan and check it: `killall -9 AudioComponentRegistrar`, then
-`auval -v aumu Ms2r Msem` (ends with "AU VALIDATION SUCCEEDED"). An ad-hoc signature is for this Mac only; to pass
+`auval -v aumu Ms2r Msem` (the effect: `auval -v aumf Ms2f Msem`; ends with "AU VALIDATION SUCCEEDED"). An ad-hoc signature is for this Mac only; to pass
 the files on to other Macs they need a Developer ID signature and notarization.
 
 ## What you need - NOT included
@@ -174,8 +180,11 @@ the CLAP, `-DMS2K_BUILD_CLAP=OFF` leaves it out; the pinned JUCE is patched for 
 
 ```
 cmake -S . -B build_vst.nosync -G Ninja -DCMAKE_BUILD_TYPE=Release -DMS2K_BUILD_VST3=ON
-cmake --build build_vst.nosync --target MS2000R_Shim MS2000R_AUShim MS2000R_ClapShim
+cmake --build build_vst.nosync --target MS2000R_Shim MS2000R_AUShim MS2000R_ClapShim MS2000R_FXShim MS2000R_FXAUShim MS2000R_FXClapShim
 cp -R build_vst.nosync/VST3_multi/MS2000R.vst3 ~/Library/Audio/Plug-Ins/VST3/
+cp -R "build_vst.nosync/VST3_multi/MS2000R FX.vst3" ~/Library/Audio/Plug-Ins/VST3/
+cp -R "build_vst.nosync/AU_multi/MS2000R FX.component" ~/Library/Audio/Plug-Ins/Components/
+cp -R "build_vst.nosync/CLAP_multi/MS2000R FX.clap" ~/Library/Audio/Plug-Ins/CLAP/
 cp -R build_vst.nosync/AU_multi/MS2000R.component ~/Library/Audio/Plug-Ins/Components/
 cp -R build_vst.nosync/CLAP_multi/MS2000R.clap ~/Library/Audio/Plug-Ins/CLAP/
 ```
@@ -190,10 +199,11 @@ VST3 and CLAP plugin (JUCE and clap-juce-extensions are fetched at configure tim
 
 ```
 cmake -S . -B build_vst -G "Visual Studio 17 2022" -DMS2K_BUILD_VST3=ON
-cmake --build build_vst --config Release --target MS2000R_Shim MS2000R_ClapShim
+cmake --build build_vst --config Release --target MS2000R_Shim MS2000R_ClapShim MS2000R_FXShim MS2000R_FXClapShim
 ```
 
-The finished plugin bundle is `build_vst\VST3_multi\MS2000R.vst3` (the loader module plus the engine). The CLAP is
+The finished plugin bundle is `build_vst\VST3_multi\MS2000R.vst3` (the loader module plus the engine), the effect
+version `build_vst\VST3_multi\MS2000R FX.vst3` and the folder `build_vst\CLAP_multi\MS2000R FX`. The CLAP is
 the folder `build_vst\CLAP_multi\MS2000R` (`MS2000R.clap`, the loader module, and `MS2000R_engine.dll` beside it):
 copy the whole folder to `%COMMONPROGRAMFILES%\CLAP`.
 

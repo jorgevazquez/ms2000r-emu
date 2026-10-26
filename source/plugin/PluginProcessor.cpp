@@ -95,7 +95,7 @@ juce::File findHome()
 
 Ms2kProcessor::Ms2kProcessor()
     : AudioProcessor(BusesProperties()
-                         .withInput("Audio In", juce::AudioChannelSet::stereo(), false)
+                         .withInput("Audio In", juce::AudioChannelSet::stereo(), MS2K_FX != 0)   // FX-1: on by default in the effect
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
     ++g_liveProcessors;

@@ -30,6 +30,12 @@
 
 #include <clap/clap.h>
 
+// FX-1: the effect version (MS2000R FX.clap) keeps its engine copies in a folder of its own - both loaders can be in
+// one process, and each names its copies engine_<pid>_<n> and removes its own process's leftovers
+#ifndef MS2K_ENGINE_DIR
+#define MS2K_ENGINE_DIR "MS2000R_clap_engines"
+#endif
+
 namespace {
 
 typedef int (*LiveProc)();
@@ -62,7 +68,7 @@ std::wstring tempDir()
 {
     wchar_t buf[MAX_PATH] = {};
     GetTempPathW(MAX_PATH, buf);
-    std::wstring d = std::wstring(buf) + L"MS2000R_clap_engines";
+    std::wstring d = std::wstring(buf) + L"" MS2K_ENGINE_DIR;
     CreateDirectoryW(d.c_str(), nullptr);
     return d;
 }
@@ -127,7 +133,7 @@ PathStr tempDir()
     const char* t = std::getenv("TMPDIR");
     PathStr d = PathStr(t && *t ? t : "/tmp/");
     if (d.back() != '/') d += '/';
-    d += "MS2000R_clap_engines";
+    d += MS2K_ENGINE_DIR;
     std::error_code ec; std::filesystem::create_directories(d, ec);
     return d;
 }

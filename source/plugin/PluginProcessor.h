@@ -12,6 +12,11 @@
 #include "panel_params.h"
 #include "core/master_vr.h"
 #include <array>
+#include <limits>
+
+#ifndef MS2K_FX
+#define MS2K_FX 0   // FX-1: 1 in the MS2000R_FX target
+#endif
 
 class Ms2kProcessor : public juce::AudioProcessor, private juce::Timer
 {
@@ -27,11 +32,19 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
+#if MS2K_FX   // FX-1: the effect version (MS2000R FX.vst3) - audio in from the track it is inserted on
+    const juce::String getName() const override { return "MS2000R FX"; }
+#else
     const juce::String getName() const override { return "MS2000R"; }
+#endif
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
+#if MS2K_FX   // FX-1: the synth sounds without input (MIDI notes, its own oscillators) - the host must not suspend it
+    double getTailLengthSeconds() const override { return std::numeric_limits<double>::infinity(); }
+#else
     double getTailLengthSeconds() const override { return 0.0; }
+#endif
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }

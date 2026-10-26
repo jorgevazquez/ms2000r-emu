@@ -37,6 +37,40 @@ if(MS2K_BUILD_CLAP)
         CLAP_FEATURES instrument synthesizer stereo)
 endif()
 
+# FX-1: the same processor as an effect, MS2000R FX (VST3, CLAP; on macOS also an AU, type aumf) - inserted on an audio track it takes that track as its
+# Audio In (vocoder, OSC1 AUDIO IN), which hosts do not route to an instrument. MIDI in/out as in the instrument.
+juce_add_plugin(MS2000R_FX
+    COMPANY_NAME "MS2000 emulation project"
+    PRODUCT_NAME "MS2000R FX"
+    PLUGIN_MANUFACTURER_CODE Msem
+    PLUGIN_CODE Ms2f
+    FORMATS ${MS2K_PLUGIN_FORMATS}
+    AU_MAIN_TYPE kAudioUnitType_MusicEffect
+    AU_EXPORT_PREFIX MS2000RFXAU
+    BUNDLE_ID io.github.ms2000r-emu.plugin.fx
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT TRUE
+    NEEDS_MIDI_OUTPUT TRUE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    VST3_CATEGORIES Fx Synth)
+
+juce_generate_juce_header(MS2000R_FX)
+
+target_sources(MS2000R_FX PRIVATE PluginProcessor.cpp PluginEditor.cpp)
+target_include_directories(MS2000R_FX PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/source)
+target_compile_definitions(MS2000R_FX PUBLIC MS2K_FX=1
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(MS2000R_FX PRIVATE ms2000
+    juce::juce_audio_utils juce::juce_audio_processors
+    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+if(MS2K_BUILD_CLAP)
+    clap_juce_extensions_plugin(TARGET MS2000R_FX
+        CLAP_ID "io.github.ms2000r-emu.ms2000r-fx"
+        CLAP_FEATURES audio-effect synthesizer stereo)
+endif()
+
 # A console host that loads the built .vst3 like a DAW does and renders a note through processBlock.
 juce_add_console_app(MS2000R_HostTest PRODUCT_NAME "MS2000R_HostTest")
 juce_generate_juce_header(MS2000R_HostTest)
@@ -79,6 +113,22 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MS2K_MULTI}/Contents/x86_64-win ${MS2K_MULTI}/Contents/Resources
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_VST_VST3> ${MS2K_MULTI}/Contents/Resources/MS2000R_engine.dll
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_Shim> ${MS2K_MULTI}/Contents/x86_64-win/MS2000R.vst3)
+
+    # FX-1: the effect the same way, its engine copies in %TEMP%\MS2000R_FX_engines. Result: build_vst/VST3_multi/MS2000R FX.vst3
+    add_library(MS2000R_FXShim SHARED shim/ms2k_vst3_shim.cpp
+        ${MS2K_VST3SDK}/pluginterfaces/base/coreiids.cpp ${MS2K_VST3SDK}/pluginterfaces/base/funknown.cpp)
+    target_include_directories(MS2000R_FXShim PRIVATE ${MS2K_VST3SDK})
+    target_compile_definitions(MS2000R_FXShim PRIVATE MS2K_ENGINE_DIR="MS2000R_FX_engines")
+    target_link_libraries(MS2000R_FXShim PRIVATE ole32)
+    set_target_properties(MS2000R_FXShim PROPERTIES OUTPUT_NAME "MS2000R FX" SUFFIX .vst3)
+    add_dependencies(MS2000R_FXShim MS2000R_FX_VST3)
+    set(MS2K_FX_MULTI "${CMAKE_BINARY_DIR}/VST3_multi/MS2000R FX.vst3")
+    add_custom_command(TARGET MS2000R_FXShim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${MS2K_FX_MULTI}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${MS2K_FX_MULTI}/Contents/x86_64-win" "${MS2K_FX_MULTI}/Contents/Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FX_VST3> "${MS2K_FX_MULTI}/Contents/Resources/MS2000R_engine.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FXShim> "${MS2K_FX_MULTI}/Contents/x86_64-win/MS2000R FX.vst3"
+        VERBATIM)
 elseif(APPLE)
     # MAC-4: the same on macOS - JUCE's bundle with its binary moved to Contents/Resources/MS2000R_engine and the
     # loader module as Contents/MacOS/MS2000R. Ad-hoc signed (the engine first: it is code outside Contents/MacOS).
@@ -100,6 +150,26 @@ elseif(APPLE)
         COMMAND codesign --force --sign - ${MS2K_MULTI}/Contents/Resources/MS2000R_engine
         COMMAND codesign --force --sign - ${MS2K_MULTI})
 
+    # FX-1: the effect the same way, its engine copies in $TMPDIR/MS2000R_FX_engines. Result: build_vst/VST3_multi/MS2000R FX.vst3
+    add_library(MS2000R_FXShim MODULE shim/ms2k_vst3_shim.cpp
+        ${MS2K_VST3SDK}/pluginterfaces/base/coreiids.cpp ${MS2K_VST3SDK}/pluginterfaces/base/funknown.cpp)
+    target_include_directories(MS2000R_FXShim PRIVATE ${MS2K_VST3SDK})
+    target_compile_features(MS2000R_FXShim PRIVATE cxx_std_17)
+    target_compile_definitions(MS2000R_FXShim PRIVATE MS2K_ENGINE_DIR="MS2000R_FX_engines")
+    set_target_properties(MS2000R_FXShim PROPERTIES CXX_VISIBILITY_PRESET hidden PREFIX "" SUFFIX "" OUTPUT_NAME MS2000R_fx_shim)
+    target_link_libraries(MS2000R_FXShim PRIVATE "-framework CoreFoundation")
+    add_dependencies(MS2000R_FXShim MS2000R_FX_VST3)
+    set(MS2K_FX_MULTI "${CMAKE_BINARY_DIR}/VST3_multi/MS2000R FX.vst3")
+    add_custom_command(TARGET MS2000R_FXShim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${MS2K_FX_MULTI}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:MS2000R_FX_VST3> "${MS2K_FX_MULTI}"
+        COMMAND ${CMAKE_COMMAND} -E rename "${MS2K_FX_MULTI}/Contents/MacOS/MS2000R FX" "${MS2K_FX_MULTI}/Contents/Resources/MS2000R_engine"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FXShim> "${MS2K_FX_MULTI}/Contents/MacOS/MS2000R FX"
+        COMMAND xattr -cr "${MS2K_FX_MULTI}"
+        COMMAND codesign --force --sign - "${MS2K_FX_MULTI}/Contents/Resources/MS2000R_engine"
+        COMMAND codesign --force --sign - "${MS2K_FX_MULTI}"
+        VERBATIM)
+
     # ... and the Audio Unit the same way (shim/ms2k_au_shim.cpp). Result: build_vst/AU_multi/MS2000R.component
     add_library(MS2000R_AUShim MODULE shim/ms2k_au_shim.cpp)
     target_compile_features(MS2000R_AUShim PRIVATE cxx_std_17)
@@ -116,6 +186,26 @@ elseif(APPLE)
         COMMAND xattr -cr ${MS2K_AU_MULTI}
         COMMAND codesign --force --sign - ${MS2K_AU_MULTI}/Contents/Resources/MS2000R_engine
         COMMAND codesign --force --sign - ${MS2K_AU_MULTI})
+
+    # FX-1: the effect's AU the same way (factory MS2000RFXAUFactory, copies in $TMPDIR/MS2000R_FX_au_engines).
+    # Result: build_vst/AU_multi/MS2000R FX.component
+    add_library(MS2000R_FXAUShim MODULE shim/ms2k_au_shim.cpp)
+    target_compile_features(MS2000R_FXAUShim PRIVATE cxx_std_17)
+    target_compile_definitions(MS2000R_FXAUShim PRIVATE MS2K_AU_FACTORY=MS2000RFXAUFactory MS2K_ENGINE_DIR="MS2000R_FX_au_engines")
+    set_target_properties(MS2000R_FXAUShim PROPERTIES CXX_VISIBILITY_PRESET hidden PREFIX "" SUFFIX "" OUTPUT_NAME MS2000R_fx_au_shim)
+    target_link_libraries(MS2000R_FXAUShim PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+    add_dependencies(MS2000R_FXAUShim MS2000R_FX_AU)
+    set(MS2K_FX_AU_MULTI "${CMAKE_BINARY_DIR}/AU_multi/MS2000R FX.component")
+    add_custom_command(TARGET MS2000R_FXAUShim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${MS2K_FX_AU_MULTI}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:MS2000R_FX_AU> "${MS2K_FX_AU_MULTI}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${MS2K_FX_AU_MULTI}/Contents/Resources"
+        COMMAND ${CMAKE_COMMAND} -E rename "${MS2K_FX_AU_MULTI}/Contents/MacOS/MS2000R FX" "${MS2K_FX_AU_MULTI}/Contents/Resources/MS2000R_engine"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FXAUShim> "${MS2K_FX_AU_MULTI}/Contents/MacOS/MS2000R FX"
+        COMMAND xattr -cr "${MS2K_FX_AU_MULTI}"
+        COMMAND codesign --force --sign - "${MS2K_FX_AU_MULTI}/Contents/Resources/MS2000R_engine"
+        COMMAND codesign --force --sign - "${MS2K_FX_AU_MULTI}"
+        VERBATIM)
 endif()
 
 # MAC-5: several CLAP instances per process, as above (shim/ms2k_clap_shim.cpp). The loader module is the .clap the
@@ -147,5 +237,39 @@ if(MS2K_BUILD_CLAP AND (WIN32 OR APPLE))
             COMMAND xattr -cr ${MS2K_CLAP_MULTI}
             COMMAND codesign --force --sign - ${MS2K_CLAP_MULTI}/Contents/Resources/MS2000R_engine
             COMMAND codesign --force --sign - ${MS2K_CLAP_MULTI})
+    endif()
+endif()
+
+# FX-1: the effect's CLAP the same way, its engine copies in $TMPDIR/MS2000R_FX_clap_engines (%TEMP%\...).
+# macOS:   build_vst/CLAP_multi/MS2000R FX.clap
+# Windows: build_vst/CLAP_multi/MS2000R FX/MS2000R FX.clap + MS2000R_engine.dll (install the whole folder)
+if(MS2K_BUILD_CLAP AND (WIN32 OR APPLE))
+    add_library(MS2000R_FXClapShim MODULE shim/ms2k_clap_shim.cpp)
+    target_compile_features(MS2000R_FXClapShim PRIVATE cxx_std_17)
+    target_compile_definitions(MS2000R_FXClapShim PRIVATE MS2K_ENGINE_DIR="MS2000R_FX_clap_engines")
+    target_link_libraries(MS2000R_FXClapShim PRIVATE clap-core)
+    add_dependencies(MS2000R_FXClapShim MS2000R_FX_CLAP)
+    if(WIN32)
+        set_target_properties(MS2000R_FXClapShim PROPERTIES PREFIX "" OUTPUT_NAME "MS2000R FX" SUFFIX .clap)
+        set(MS2K_FX_CLAP_MULTI "${CMAKE_BINARY_DIR}/CLAP_multi/MS2000R FX")
+        add_custom_command(TARGET MS2000R_FXClapShim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${MS2K_FX_CLAP_MULTI}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${MS2K_FX_CLAP_MULTI}"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FX_CLAP> "${MS2K_FX_CLAP_MULTI}/MS2000R_engine.dll"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FXClapShim> "${MS2K_FX_CLAP_MULTI}/MS2000R FX.clap"
+            VERBATIM)
+    else()
+        set_target_properties(MS2000R_FXClapShim PROPERTIES CXX_VISIBILITY_PRESET hidden PREFIX "" SUFFIX "" OUTPUT_NAME MS2000R_fx_clap_shim)
+        set(MS2K_FX_CLAP_MULTI "${CMAKE_BINARY_DIR}/CLAP_multi/MS2000R FX.clap")
+        add_custom_command(TARGET MS2000R_FXClapShim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${MS2K_FX_CLAP_MULTI}"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:MS2000R_FX_CLAP> "${MS2K_FX_CLAP_MULTI}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${MS2K_FX_CLAP_MULTI}/Contents/Resources"
+            COMMAND ${CMAKE_COMMAND} -E rename "${MS2K_FX_CLAP_MULTI}/Contents/MacOS/MS2000R FX" "${MS2K_FX_CLAP_MULTI}/Contents/Resources/MS2000R_engine"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:MS2000R_FXClapShim> "${MS2K_FX_CLAP_MULTI}/Contents/MacOS/MS2000R FX"
+            COMMAND xattr -cr "${MS2K_FX_CLAP_MULTI}"
+            COMMAND codesign --force --sign - "${MS2K_FX_CLAP_MULTI}/Contents/Resources/MS2000R_engine"
+            COMMAND codesign --force --sign - "${MS2K_FX_CLAP_MULTI}"
+            VERBATIM)
     endif()
 endif()
